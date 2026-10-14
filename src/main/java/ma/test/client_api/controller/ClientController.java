@@ -1,3 +1,4 @@
+
 package ma.test.client_api.controller;
 
 import ma.test.client_api.entity.Agence;
@@ -7,11 +8,13 @@ import ma.test.client_api.repository.ClientRepository;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/clients")
@@ -28,10 +31,34 @@ public class ClientController {
         this.agenceRepository = agenceRepository;
     }
 
-    // GET: afficher tous les clients
+    // GET: afficher les clients avec pagination et recherche
     @GetMapping
-    public List<Client> getAllClients() {
-        return clientRepository.findAll();
+    public Page<Client> getAllClients(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "") String search) {
+
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Page ou taille invalide"
+            );
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("id").ascending()
+        );
+
+        if (search == null || search.isBlank()) {
+            return clientRepository.findAll(pageable);
+        }
+
+        return clientRepository.searchClients(
+                search.trim(),
+                pageable
+        );
     }
 
     // GET: afficher un client par ID
@@ -49,7 +76,6 @@ public class ClientController {
     @ResponseStatus(HttpStatus.CREATED)
     public Client createClient(@Valid @RequestBody Client client) {
 
-        // Vérifier si le CIN existe déjà
         if (clientRepository.existsByCin(client.getCin())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -57,7 +83,7 @@ public class ClientController {
             );
         }
 
-        // Agence facultative : vérifier uniquement si elle est fournie
+        // Agence facultative
         if (client.getAgence() != null
                 && client.getAgence().getId() != null) {
 
@@ -73,7 +99,7 @@ public class ClientController {
             client.setAgence(null);
         }
 
-        // Statut facultatif : ACTIF par défaut
+        // Statut ACTIF par défaut
         if (client.getStatut() == null
                 || client.getStatut().isBlank()) {
             client.setStatut("ACTIF");
@@ -103,13 +129,11 @@ public class ClientController {
             );
         }
 
-        // Mettre à jour les champs obligatoires
         existingClient.setCin(client.getCin());
         existingClient.setNom(client.getNom());
         existingClient.setPrenom(client.getPrenom());
         existingClient.setTelephone(client.getTelephone());
 
-        // Mettre à jour les champs facultatifs
         existingClient.setDateNaissance(client.getDateNaissance());
         existingClient.setEmail(client.getEmail());
         existingClient.setAdresse(client.getAdresse());
@@ -133,7 +157,7 @@ public class ClientController {
             existingClient.setAgence(null);
         }
 
-        // Statut facultatif : garder l'ancien s'il n'est pas fourni
+        // Garder l'ancien statut s'il n'est pas envoyé
         if (client.getStatut() != null
                 && !client.getStatut().isBlank()) {
             existingClient.setStatut(client.getStatut());
