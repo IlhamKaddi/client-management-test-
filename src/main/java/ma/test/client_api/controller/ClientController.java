@@ -31,12 +31,14 @@ public class ClientController {
         this.agenceRepository = agenceRepository;
     }
 
-    // GET: afficher les clients avec pagination et recherche
+    // GET: afficher les clients avec filtres et pagination
     @GetMapping
     public Page<Client> getAllClients(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size,
-            @RequestParam(defaultValue = "") String search) {
+            @RequestParam(required = false) String cin,
+            @RequestParam(required = false) String nomPrenom,
+            @RequestParam(required = false) Long agenceId) {
 
         if (page < 0 || size < 1 || size > 100) {
             throw new ResponseStatusException(
@@ -51,12 +53,10 @@ public class ClientController {
                 Sort.by("id").ascending()
         );
 
-        if (search == null || search.isBlank()) {
-            return clientRepository.findAll(pageable);
-        }
-
-        return clientRepository.searchClients(
-                search.trim(),
+        return clientRepository.searchWithFilters(
+                cin == null ? "" : cin.trim(),
+                nomPrenom == null ? "" : nomPrenom.trim(),
+                agenceId,
                 pageable
         );
     }
@@ -83,7 +83,6 @@ public class ClientController {
             );
         }
 
-        // Agence facultative
         if (client.getAgence() != null
                 && client.getAgence().getId() != null) {
 
@@ -99,7 +98,6 @@ public class ClientController {
             client.setAgence(null);
         }
 
-        // Statut ACTIF par défaut
         if (client.getStatut() == null
                 || client.getStatut().isBlank()) {
             client.setStatut("ACTIF");
@@ -120,7 +118,6 @@ public class ClientController {
                         "Client introuvable"
                 ));
 
-        // Vérifier l'unicité du CIN
         if (!existingClient.getCin().equals(client.getCin())
                 && clientRepository.existsByCin(client.getCin())) {
             throw new ResponseStatusException(
@@ -133,7 +130,6 @@ public class ClientController {
         existingClient.setNom(client.getNom());
         existingClient.setPrenom(client.getPrenom());
         existingClient.setTelephone(client.getTelephone());
-
         existingClient.setDateNaissance(client.getDateNaissance());
         existingClient.setEmail(client.getEmail());
         existingClient.setAdresse(client.getAdresse());
@@ -141,7 +137,6 @@ public class ClientController {
         existingClient.setCodePostal(client.getCodePostal());
         existingClient.setProfession(client.getProfession());
 
-        // Agence facultative
         if (client.getAgence() != null
                 && client.getAgence().getId() != null) {
 
@@ -157,7 +152,6 @@ public class ClientController {
             existingClient.setAgence(null);
         }
 
-        // Garder l'ancien statut s'il n'est pas envoyé
         if (client.getStatut() != null
                 && !client.getStatut().isBlank()) {
             existingClient.setStatut(client.getStatut());
